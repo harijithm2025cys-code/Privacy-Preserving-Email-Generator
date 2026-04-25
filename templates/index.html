@@ -423,11 +423,20 @@ function closeMobile(){
 }
 function copyEmail(){
   if(!currentEmail) return;
-  navigator.clipboard.writeText(currentEmail).then(()=>{
-    const btn=document.getElementById('copy-btn');
-    btn.textContent='Copied!';
-    setTimeout(()=>btn.textContent='Copy',1500);
-  });
+  const btn=document.getElementById('copy-btn');
+  
+  // Fallback method that works on http
+  const el = document.createElement('textarea');
+  el.value = currentEmail;
+  el.style.position = 'fixed';
+  el.style.opacity = '0';
+  document.body.appendChild(el);
+  el.select();
+  document.execCommand('copy');
+  document.body.removeChild(el);
+  
+  btn.textContent='Copied!';
+  setTimeout(()=>btn.textContent='Copy',1500);
 }
 </script>
 </body>
