@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Tempmail — Disposable Inbox</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f12;
+    --bg2: #141619;
+    --bg3: #1c1f24;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #e8eaf0;
+    --muted: #666b78;
+    --accent: #3b82f6;
+    --accent-dim: rgba(59,130,246,0.12);
+    --accent-glow: rgba(59,130,246,0.25);
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,0.12);
+    --red: #ef4444;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  html { font-size: 16px; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 4px; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 2rem; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: rgba(13,15,18,0.88);
+    backdrop-filter: blur(12px); z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon {
+    width: 32px; height: 32px; background: var(--accent-dim);
+    border: 1px solid var(--accent-glow); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo-icon svg { width: 16px; height: 16px; stroke: var(--accent); fill: none; stroke-width: 2; }
+  .logo-name { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+  .logo-tag { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .header-status { display: flex; align-items: center; gap: 6px; font-size: 12px; font-family: var(--mono); color: var(--muted); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  .dot.error { background: var(--red); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  main {
+    flex: 1; display: grid; grid-template-columns: 360px 1fr;
+    max-width: 1100px; width: 100%; margin: 0 auto;
+    padding: 2rem; gap: 1.5rem; align-items: start;
+  }
+  .sidebar { display: flex; flex-direction: column; gap: 1rem; }
+
+  .panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .panel-header {
+    padding: .75rem 1.25rem; border-bottom: 1px solid var(--border);
+    font-size: 11px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted); font-family: var(--mono);
+  }
+  .panel-body { padding: 1.25rem; }
+
+  .email-display {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+    padding: .75rem 1rem; display: flex; align-items: center; gap: 8px; margin-bottom: 1rem;
+  }
+  .email-text { flex: 1; font-family: var(--mono); font-size: 13px; word-break: break-all; line-height: 1.4; }
+  .copy-btn {
+    flex-shrink: 0; background: transparent; border: 1px solid var(--border2);
+    border-radius: 7px; padding: 5px 10px; font-size: 11px; font-family: var(--mono);
+    color: var(--muted); cursor: pointer; transition: all .15s;
+  }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-row { display: flex; gap: 8px; }
+  .btn {
+    flex: 1; padding: 9px 14px; font-size: 12px; font-family: var(--sans); font-weight: 600;
+    border-radius: 9px; border: 1px solid var(--border2); background: transparent;
+    color: var(--muted); cursor: pointer; display: flex; align-items: center;
+    justify-content: center; gap: 6px; transition: all .15s;
+  }
+  .btn:hover { background: var(--bg3); color: var(--text); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #2563eb; }
+  .btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 1rem; }
+  .stat { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: .75rem; }
+  .stat-label { font-size: 10px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px; }
+  .stat-value { font-size: 20px; font-weight: 700; }
+  .stat-value.accent { color: var(--accent); }
+
+  .inbox { display: flex; flex-direction: column; }
+  .inbox-header {
+    padding: .75rem 1.25rem; border-bottom: 1px solid var(--border);
+    font-size: 11px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted); font-family: var(--mono);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .inbox-badge { background: var(--accent-dim); color: var(--accent); border-radius: 20px; padding: 2px 8px; font-size: 11px; }
+  .msg-list { min-height: 360px; }
+
+  .empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: .75rem; padding: 4rem 2rem; color: var(--muted); font-size: 13px; text-align: center;
+  }
+  .empty svg { width: 40px; height: 40px; stroke: var(--border2); fill: none; stroke-width: 1.5; }
+  .empty strong { color: var(--text); font-size: 15px; display: block; }
+
+  .msg-item {
+    padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); cursor: pointer;
+    transition: background .1s; display: grid; grid-template-columns: 1fr auto;
+    gap: 4px 12px; align-items: start;
+  }
+  .msg-item:hover { background: rgba(255,255,255,0.03); }
+  .msg-item.active { background: var(--accent-dim); border-left: 2px solid var(--accent); }
+  .msg-item:last-child { border-bottom: none; }
+  .msg-from { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .msg-time { font-size: 11px; font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+  .msg-subject { font-size: 12px; color: var(--muted); grid-column: 1/-1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .msg-preview { font-size: 12px; color: var(--muted); grid-column: 1/-1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .7; }
+  .new-pill {
+    display: inline-block; background: var(--green-dim); color: var(--green);
+    font-size: 9px; font-family: var(--mono); font-weight: 500;
+    padding: 2px 6px; border-radius: 20px; margin-left: 6px;
+    vertical-align: middle; text-transform: uppercase; letter-spacing: .05em;
+  }
+
+  .detail-pane {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; display: flex; flex-direction: column; min-height: 500px;
+  }
+  .detail-empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1rem; padding: 5rem 2rem; color: var(--muted); font-size: 14px; text-align: center; flex: 1;
+  }
+  .detail-empty svg { width: 48px; height: 48px; stroke: var(--border2); fill: none; stroke-width: 1.5; }
+  .detail-head { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); }
+  .detail-subject { font-size: 18px; font-weight: 700; margin-bottom: .75rem; line-height: 1.3; }
+  .detail-meta { display: flex; flex-direction: column; gap: 4px; }
+  .meta-row { display: flex; gap: 8px; font-size: 12px; font-family: var(--mono); }
+  .meta-key { color: var(--muted); min-width: 40px; }
+  .detail-body {
+    padding: 1.5rem; font-size: 14px; line-height: 1.8;
+    white-space: pre-wrap; word-break: break-word;
+    flex: 1; overflow-y: auto; max-height: calc(100vh - 300px);
+  }
+  .detail-body.loading { color: var(--muted); font-family: var(--mono); }
+
+  .spinner {
+    display: inline-block; width: 13px; height: 13px;
+    border: 2px solid rgba(255,255,255,.1); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .65s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* server badge */
+  .server-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--green-dim); color: var(--green);
+    font-size: 11px; font-family: var(--mono);
+    padding: 4px 10px; border-radius: 20px;
+    border: 1px solid rgba(34,197,94,0.2);
+  }
+  .server-badge svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  footer {
+    text-align: center; padding: 1.5rem;
+    font-size: 11px; font-family: var(--mono);
+    color: var(--muted); border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 760px) {
+    main { grid-template-columns: 1fr; padding: 1rem; }
+    .detail-pane { display: none; }
+    .detail-pane.mobile-open {
+      display: flex; position: fixed; inset: 0; z-index: 200;
+      border-radius: 0; overflow-y: auto;
+    }
+    .mobile-back { display: flex !important; }
+  }
+  .mobile-back {
+    display: none; align-items: center; gap: 8px;
+    padding: .75rem 1.5rem; border-bottom: 1px solid var(--border);
+    font-size: 13px; color: var(--muted); cursor: pointer;
+    background: none; border-left: none; border-right: none; border-top: none;
+    text-align: left; width: 100%; font-family: var(--sans);
+  }
+  .mobile-back svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>
+    </div>
+    <div>
+      <div class="logo-name">Tempmail</div>
+      <div class="logo-tag">disposable inbox</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span class="server-badge">
+      <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+      Flask backend
+    </span>
+    <div class="header-status">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-text">idle</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <aside class="sidebar">
+    <div class="panel">
+      <div class="panel-header">Address</div>
+      <div class="panel-body">
+        <div class="email-display">
+          <div class="email-text" id="email-display">—</div>
+          <button class="copy-btn" id="copy-btn" onclick="copyEmail()">Copy</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="gen-btn" onclick="generateEmail()">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            Generate
+          </button>
+          <button class="btn" id="refresh-btn" onclick="refreshInbox()" disabled>
+            <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh
+          </button>
+        </div>
+        <div class="stats-grid">
+          <div class="stat">
+            <div class="stat-label">Messages</div>
+            <div class="stat-value accent" id="stat-count">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Last check</div>
+            <div class="stat-value" id="stat-time" style="font-size:13px;font-family:var(--mono)">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel inbox">
+      <div class="inbox-header">
+        Inbox
+        <span class="inbox-badge" id="inbox-badge" style="display:none"></span>
+      </div>
+      <div class="msg-list" id="msg-list">
+        <div class="empty">
+          <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>
+          <span><strong>No inbox yet</strong>Generate an address to start.</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="detail-pane" id="detail-pane">
+    <button class="mobile-back" onclick="closeMobile()">
+      <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to inbox
+    </button>
+    <div class="detail-empty" id="detail-empty">
+      <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/><line x1="8" y1="14" x2="16" y2="14"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+      <span>Select a message to read it</span>
+    </div>
+    <div id="detail-content" style="display:none;flex-direction:column;flex:1">
+      <div class="detail-head">
+        <div class="detail-subject" id="d-subject">—</div>
+        <div class="detail-meta">
+          <div class="meta-row"><span class="meta-key">From</span><span id="d-from">—</span></div>
+          <div class="meta-row"><span class="meta-key">To</span><span id="d-to">—</span></div>
+          <div class="meta-row"><span class="meta-key">Date</span><span id="d-date">—</span></div>
+        </div>
+      </div>
+      <div class="detail-body" id="d-body"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  flask backend &nbsp;·&nbsp; mail.tm API &nbsp;·&nbsp; messages auto-delete after 24h
+</footer>
+
+<script>
+let currentToken = null;
+let currentEmail = null;
+let messages = [];
+let polling = null;
+let seenIds = new Set();
+let activeIdx = -1;
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function timeAgo(iso){
+  const d=Math.floor((Date.now()-new Date(iso))/1000);
+  if(d<60) return 'just now';
+  if(d<3600) return Math.floor(d/60)+'m ago';
+  if(d<86400) return Math.floor(d/3600)+'h ago';
+  return new Date(iso).toLocaleDateString();
+}
+function setStatus(state, text){
+  document.getElementById('status-dot').className='dot'+(state==='active'?' active':state==='error'?' error':'');
+  document.getElementById('status-text').textContent=text;
+}
+
+async function generateEmail(){
+  const btn=document.getElementById('gen-btn');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span> Setting up...';
+  if(polling){clearInterval(polling);polling=null;}
+  seenIds=new Set(); messages=[]; activeIdx=-1;
+  setStatus('','contacting server...');
+  resetDetail(); renderInbox(false);
+  try{
+    // Call Flask backend
+    const res=await fetch('/api/generate',{method:'POST'});
+    const data=await res.json();
+    if(data.error) throw new Error(data.error);
+    currentToken=data.token;
+    currentEmail=data.email;
+    document.getElementById('email-display').textContent=data.email;
+    document.getElementById('d-to').textContent=data.email;
+    setStatus('active','listening...');
+    document.getElementById('refresh-btn').disabled=false;
+    polling=setInterval(refreshInbox,5000);
+    renderInbox(false);
+  }catch(e){
+    setStatus('error','error: '+e.message);
+  }
+  btn.disabled=false;
+  btn.innerHTML='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> New address';
+}
+
+async function refreshInbox(){
+  if(!currentToken) return;
+  try{
+    // Call Flask backend
+    const res=await fetch('/api/messages',{headers:{Authorization:'Bearer '+currentToken}});
+    const data=await res.json();
+    const msgs=data['hydra:member']||[];
+    const hasNew=msgs.some(m=>!seenIds.has(m.id));
+    msgs.forEach(m=>seenIds.add(m.id));
+    if(msgs.length!==messages.length||hasNew){messages=msgs;renderInbox(hasNew);}
+    document.getElementById('stat-time').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    setStatus('active','listening...');
+  }catch(e){setStatus('error','fetch error');}
+}
+
+function renderInbox(hasNew){
+  const list=document.getElementById('msg-list');
+  const badge=document.getElementById('inbox-badge');
+  document.getElementById('stat-count').textContent=messages.length;
+  if(messages.length){ badge.style.display='inline'; badge.textContent=messages.length; }
+  else { badge.style.display='none'; }
+  if(!messages.length){
+    list.innerHTML=`<div class="empty">
+      <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>
+      <span><strong>Inbox empty</strong>Share your address to receive mail.</span>
+    </div>`;
+    return;
+  }
+  list.innerHTML=messages.map((m,i)=>`
+    <div class="msg-item${i===activeIdx?' active':''}" onclick="openDetail(${i})">
+      <div class="msg-from">${esc(m.from?.address||'Unknown')}${hasNew&&i===0?'<span class="new-pill">new</span>':''}</div>
+      <div class="msg-time">${timeAgo(m.createdAt)}</div>
+      <div class="msg-subject">${esc(m.subject||'(no subject)')}</div>
+      <div class="msg-preview">${esc(m.intro||'')}</div>
+    </div>
+  `).join('');
+}
+
+async function openDetail(i){
+  activeIdx=i; renderInbox(false);
+  const m=messages[i];
+  document.getElementById('detail-empty').style.display='none';
+  const dc=document.getElementById('detail-content');
+  dc.style.display='flex';
+  document.getElementById('d-subject').textContent=m.subject||'(no subject)';
+  document.getElementById('d-from').textContent=m.from?.address||'—';
+  document.getElementById('d-to').textContent=currentEmail||'—';
+  document.getElementById('d-date').textContent=new Date(m.createdAt).toLocaleString();
+  const body=document.getElementById('d-body');
+  body.className='detail-body loading';
+  body.textContent='Loading from server...';
+  document.getElementById('detail-pane').classList.add('mobile-open');
+  try{
+    // Call Flask backend
+    const res=await fetch(`/api/messages/${m.id}`,{headers:{Authorization:'Bearer '+currentToken}});
+    const d=await res.json();
+    body.className='detail-body';
+    body.textContent=d.text||stripHtml(d.html)||'(empty message)';
+  }catch{
+    body.className='detail-body';
+    body.textContent='Could not load message.';
+  }
+}
+
+function stripHtml(html){
+  if(!html) return '';
+  return html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s{2,}/g,' ').trim();
+}
+function resetDetail(){
+  document.getElementById('detail-empty').style.display='flex';
+  document.getElementById('detail-content').style.display='none';
+}
+function closeMobile(){
+  document.getElementById('detail-pane').classList.remove('mobile-open');
+  activeIdx=-1; renderInbox(false);
+}
+function copyEmail(){
+  if(!currentEmail) return;
+  navigator.clipboard.writeText(currentEmail).then(()=>{
+    const btn=document.getElementById('copy-btn');
+    btn.textContent='Copied!';
+    setTimeout(()=>btn.textContent='Copy',1500);
+  });
+}
+</script>
+</body>
+</html>
